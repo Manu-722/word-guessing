@@ -1,83 +1,77 @@
-import random
+import requests
 import sqlite3
 
-# Define levels with words, max attempts, and hints
-LEVELS = {
-    1: {"words": {"cat": "An animal", "dog": "A pet", "hat": "Worn on the head", "sun": "A celestial body"},
-        "max_attempts": 5},
-    2: {"words": {"python": "A programming language", "computer": "An electronic device",
-                  "developer": "A person who creates software", "keyboard": "Used for typing"},
-        "max_attempts": 7},
-    3: {"words": {"algorithm": "A set of rules in coding", "encryption": "Used for securing data",
-                  "debugging": "Fixing coding errors", "framework": "A structured coding environment"},
-        "max_attempts": 9},
-}
+WORD_API_URL = "https://random-words-api.kushcreates.com/api"
+DICT_API_URL = "https://api.dictionaryapi.dev/api/v2/entries/en"
 
-DB_FILE = "game_scores.db"
+# Database setup
+conn = sqlite3.connect("game_scores.db")
+cursor = conn.cursor()
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS scores (
+        name TEXT PRIMARY KEY,
+        score INTEGER,
+        level TEXT
+    )
+""")
+conn.commit()
 
-def initialize_database(): 
-    """Creates the database and scores table if not already present."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            player_name TEXT,
-            level INTEGER,
-            completed_words TEXT,
-            score INTEGER
-        )
-    """)
+def save_or_update_score(name, score, level):
+    cursor.execute("SELECT * FROM scores WHERE name=?", (name,))
+    existing_player = cursor.fetchone()
+
+    if existing_player:
+        new_score = existing_player[1] + score
+        cursor.execute("UPDATE scores SET score=?, level=? WHERE name=?", (new_score, level, name))
+    else:
+        cursor.execute("INSERT INTO scores (name, score, level) VALUES (?, ?, ?)", (name, score, level))
+
     conn.commit()
-    conn.close()
 
-def save_progress(player_name, level, completed_words, score):
-    """Saves the player's progress in the database."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO scores (player_name, level, completed_words, score) VALUES (?, ?, ?, ?)",
-                   (player_name, level, ",".join(completed_words), score))
-    conn.commit()
-    conn.close()
+def get_word_with_hint():
+    """Fetch a word with a valid hint."""
+    while True:
+        try:
+            resp = requests.get(WORD_API_URL, params={"language": "en", "words": 1})
+            resp.raise_for_status()
+            word = resp.json()[0]["word"]
+        except Exception as e:
+            print(f"Failed to fetch word: {e}")
+            return None, None
 
-def load_progress(player_name):
-    """Loads the player's progress if available."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT level, completed_words, score FROM scores WHERE player_name = ? ORDER BY id DESC LIMIT 1",
-                   (player_name,)) # Fetch the latest progress
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        level = int(result[0]) 
-        completed_words = result[1].split(",") if result[1] else [] # split 2nd item into a list
-        score = int(result[2])
-        return level, completed_words, score
-    return None
+        try:
+            dict_resp = requests.get(f"{DICT_API_URL}/{word}")
+            dict_resp.raise_for_status()
+            hint = dict_resp.json()[0]["meanings"][0]["definitions"][0]["definition"]
+            if hint and isinstance(hint, str) and word.isalpha():
+                return word.lower(), hint
+        except Exception:
+            continue  # Skip if no valid hint
 
-def display_leaderboard():
-    """Displays the leaderboard with sorted scores."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT player_name, level, score FROM scores ORDER BY score DESC")
-    scores = cursor.fetchall()
-    conn.close()
+def play_guessing_game():
+    name = input("Enter your name: ")
+    levels = {"easy": 50, "medium": 40, "hard": 20}
+    level_attempts = {"easy": 8, "medium": 6, "hard": 4}
 
-    print("\n=== LEADERBOARD ===")
-    print(f"{'Rank':<5} {'Player Name':<15} {'Level':<7} {'Score':<7}") #left-align in a 5-character-wide column
-    print("-" * 40)
-    
-    for rank, (name, level, score) in enumerate(scores, 1): #loops over the fetched scores,starting the rank from 1
-        print(f"{rank:<5} {name:<15} {level:<7} {score:<7}") # prints each player's rank,name,level and score in aligned columns
+    level = input("Choose difficulty (easy, medium, hard): ").lower()
+    if level not in levels:
+        print("Invalid level, defaulting to medium.")
+        level = "medium"
 
-def play_game():
-    """Runs the Word Guessing Game with shuffled words, level selection, and progress saving."""
-    initialize_database()
-    player_name = input("Enter your name: ").title()
-    
-    progress = load_progress(player_name)
-    if progress:
-        level, completed_words, score = progress
-        print(f"Welcome back, {player_name}! You are currently in **Level {level}**.")
-    
+    total_words = levels[level]
+    attempts = level_attempts[level]
+    score = 0
+    words_played = 0
+
+    while words_played < total_words:
+        word, hint = get_word_with_hint()
+        if not word:
+            print("Could not get a valid word and hint.")
+            return
+
+        guessed_letters = set()
+        print(f"\nGuess the word! Attempts left: {attempts}")
+        print(f"Hint: {hint}")
+        print(f"The word has {len(word)} letters.\n")
+
+        
