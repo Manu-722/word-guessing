@@ -10,18 +10,18 @@ cursor = conn.cursor()
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS scores (
         name TEXT PRIMARY KEY,
-        score INTEGER,
+        score INTEGER DEFAULT 0,
         level TEXT
     )
 """)
 conn.commit()
 
 def save_or_update_score(name, score, level):
-    cursor.execute("SELECT * FROM scores WHERE name=?", (name,))
+    cursor.execute("SELECT score, level FROM scores WHERE name=?", (name,))
     existing_player = cursor.fetchone()
 
     if existing_player:
-        new_score = existing_player[1] + score
+        new_score = existing_player[0] + score
         cursor.execute("UPDATE scores SET score=?, level=? WHERE name=?", (new_score, level, name))
     else:
         cursor.execute("INSERT INTO scores (name, score, level) VALUES (?, ?, ?)", (name, score, level))
@@ -50,6 +50,13 @@ def get_word_with_hint():
 
 def play_guessing_game():
     name = input("Enter your name: ")
+    
+    # Show current player score and level if returning player
+    cursor.execute("SELECT score, level FROM scores WHERE name=?", (name,))
+    existing_player = cursor.fetchone()
+    if existing_player:
+        print(f"Welcome back {name}! Current score: {existing_player[0]}, Level: {existing_player[1]}")
+    
     levels = {"easy": 50, "medium": 40, "hard": 20}
     level_attempts = {"easy": 8, "medium": 6, "hard": 4}
 
@@ -60,7 +67,7 @@ def play_guessing_game():
 
     total_words = levels[level]
     attempts = level_attempts[level]
-    score = 0
+    score = existing_player[0] if existing_player else 0  # Keep score from previous sessions
     words_played = 0
 
     while words_played < total_words:
@@ -74,4 +81,14 @@ def play_guessing_game():
         print(f"Hint: {hint}")
         print(f"The word has {len(word)} letters.\n")
 
-        
+        while attempts > 0:
+            display = " ".join(letter if letter in guessed_letters else "_" for letter in word)
+            print(f"Word: {display}")
+            guess = input("Enter a letter (or 'exit' to quit): ").lower()
+
+            if guess == "exit":
+                print(f"Exiting game. Your score: {score}.")
+                save_or_update_score(name, score, level)
+                return
+
+            
