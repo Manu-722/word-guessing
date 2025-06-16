@@ -15,7 +15,7 @@ LEVELS = {
 
 DB_FILE = "game_scores.db"
 
-def initialize_database():
+def initialize_database(): 
     """Creates the database and scores table if not already present."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -45,13 +45,13 @@ def load_progress(player_name):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT level, completed_words, score FROM scores WHERE player_name = ? ORDER BY id DESC LIMIT 1",
-                   (player_name,))
+                   (player_name,)) # Fetch the latest progress
     result = cursor.fetchone()
     conn.close()
     
     if result:
-        level = int(result[0])
-        completed_words = result[1].split(",") if result[1] else []
+        level = int(result[0]) 
+        completed_words = result[1].split(",") if result[1] else [] # split 2nd item into a list
         score = int(result[2])
         return level, completed_words, score
     return None
@@ -65,9 +65,19 @@ def display_leaderboard():
     conn.close()
 
     print("\n=== LEADERBOARD ===")
-    print(f"{'Rank':<5} {'Player Name':<15} {'Level':<7} {'Score':<7}")
+    print(f"{'Rank':<5} {'Player Name':<15} {'Level':<7} {'Score':<7}") #left-align in a 5-character-wide column
     print("-" * 40)
     
-    for rank, (name, level, score) in enumerate(scores, 1):
-        print(f"{rank:<5} {name:<15} {level:<7} {score:<7}")
+    for rank, (name, level, score) in enumerate(scores, 1): #loops over the fetched scores,starting the rank from 1
+        print(f"{rank:<5} {name:<15} {level:<7} {score:<7}") # prints each player's rank,name,level and score in aligned columns
 
+def play_game():
+    """Runs the Word Guessing Game with shuffled words, level selection, and progress saving."""
+    initialize_database()
+    player_name = input("Enter your name: ").title()
+    
+    progress = load_progress(player_name)
+    if progress:
+        level, completed_words, score = progress
+        print(f"Welcome back, {player_name}! You are currently in **Level {level}**.")
+    
