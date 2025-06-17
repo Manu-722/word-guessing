@@ -117,4 +117,15 @@ def play_guessing_game():
                 save_or_update_score(name, score, level)
                 return
 
-    
+    print(f"\nYou finished level '{level}' with a score of {score}!")
+    save_or_update_score(name, score, level)
+
+    if level != "hard":
+        next_level = {"easy": "medium", "medium": "hard"}
+        proceed = input(f"Do you want to continue to {next_level[level]} level? (yes/no): ").lower()
+        if proceed == "yes":
+            play_guessing_game()
+
+# Run the game
+if __name__ == "__main__":
+    play_guessing_game()
